@@ -1,7 +1,9 @@
 function lab1()
     clc();
     
+    global DEBUG; %#ok<GVMIS>
     global MINIMIZATION; %#ok<GVMIS> 
+
     MINIMIZATION = input('MINIMIZATION mode? y/n: [y]', 's');
     if isempty(MINIMIZATION) || MINIMIZATION == 'y'
         MINIMIZATION = true;
@@ -9,7 +11,6 @@ function lab1()
         MINIMIZATION = false;
     end
     
-    global DEBUG; %#ok<GVMIS>
     DEBUG = input('DEBUG mode? y/n: [y]', 's');
     if isempty(DEBUG) || DEBUG == 'y'
         DEBUG = true;
@@ -34,9 +35,13 @@ function lab1()
 
     [~, n] = size(CStruct.C);
     iter = 1;
-    while k < n
+    while true
         if DEBUG
             fprintf('Итерация %d: k = %d\n', iter, k);
+        end
+
+        if k >= n
+            break;
         end
 
         % 4. Mark columns that have 0* with '+'
@@ -83,7 +88,7 @@ function lab1()
     end
 
     if DEBUG
-        fprintf('---- DEBUG DONE ----\n');
+        fprintf('---- DEBUG DONE ----\n\n');
     end
 
     % Because we mark CStar with 0/1, it turns into optimal matrix
@@ -114,26 +119,38 @@ function CStruct = InitC()
 %                6 2 12 3 6
 %                4 7 11 1 9];
     [rows, cols] = size(COrigin);
-    assert(rows == cols, 'C is not squared');
+    assert(rows == cols, 'C не квадрат');
     
     CStar = zeros(rows, cols);
     CPrime = zeros(rows, cols);
 
     CStruct = ConstructC(COrigin, COrigin, ...
                          CStar(:,1), CStar(1,:), ...
-                         CStar, CPrime, [0 0], [0 0]);
+                         CStar, CPrime, ...
+                         [0 0], [0 0], ...
+                         false, false);
 
-    global DEBUG; %#ok<GVMIS> 
+    global DEBUG; %#ok<GVMIS>
+    global MINIMIZATION; %#ok<GVMIS>
+
     tmp = DEBUG;
     DEBUG = true; %#ok<NASGU> 
-    PrintC(CStruct, 'Матрица стоимостей C');
-    DEBUG = tmp;
-
-    global MINIMIZATION; %#ok<GVMIS> 
-    if ~MINIMIZATION
+    if MINIMIZATION
+        if tmp && MINIMIZATION
+            CStruct.printMinCol = true;
+        end
+        PrintC(CStruct, 'Матрица стоимостей C');
+        CStruct.printMinCol = false;        
+    else
+        PrintC(CStruct, 'Матрица стоимостей C');
         CStruct.C = max(max(CStruct.C)) - CStruct.C;
-        PrintC(CStruct, 'Матрица максимизации C');
+        if tmp
+            CStruct.printMinCol = true;
+            PrintC(CStruct, 'Матрица максимизации C');
+            CStruct.printMinCol = false;
+        end
     end
+    DEBUG = tmp;
 end
 
 %% 2. Normalize matrix C - Subtract every col and row by their min value
@@ -147,7 +164,9 @@ function CStruct = NormalizeC(CStruct)
     end
 
     CStruct.C = C;
+    CStruct.printMinRow = true;
     PrintC(CStruct, 'Вычитать столбцы');
+    CStruct.printMinRow = false;
 
     % 2.2. Subtract rows
     for r = 1:rows
@@ -358,7 +377,7 @@ function CStruct = ApplyH(CStruct, h)
     end
 
     CStruct.C = C;
-    PrintC(CStruct, 'Apply h to C');
+    PrintC(CStruct, 'Применять h на C');
 end
 
 function f = CalculateF(C, XOpt)
@@ -377,7 +396,8 @@ end
 % CStar: матрица звёзд
 % СPrime: матрица штрих
 function CStruct = ConstructC(COrigin, C, markedRows, markedCols, ...
-                              CStar, CPrime, curPosPrime, curPosStar)
+                              CStar, CPrime, curPosPrime, curPosStar, ...
+                              printMinCol, printMinRow)
     CStruct = struct('COrigin', COrigin, ...
                      'C', C, ...
                      'markedRows', markedRows, ...
@@ -385,7 +405,9 @@ function CStruct = ConstructC(COrigin, C, markedRows, markedCols, ...
                      'CStar', CStar, ...
                      'CPrime', CPrime, ...
                      'curPosPrime', curPosPrime, ...
-                     'curPosStar', curPosStar);
+                     'curPosStar', curPosStar, ...
+                     'printMinCol', printMinCol, ...
+                     'printMinRow', printMinRow);
 end
 
 % Print C to console
@@ -399,6 +421,8 @@ function PrintC(CStruct, msg)
     markedCols      = CStruct.markedCols;
     curPosPrime     = CStruct.curPosPrime;
     curPosStar      = CStruct.curPosStar;
+    printMinCol     = CStruct.printMinCol;
+    printMinRow     = CStruct.printMinRow;
     [rows, cols]    = size(C);
 
     global DEBUG; %#ok<GVMIS> 
@@ -425,17 +449,27 @@ function PrintC(CStruct, msg)
             end
     
             if markedRows(r)
-                fprintf('    +\n');
-            else
-                fprintf('     \n');
+                fprintf('    +');
             end
+
+            if printMinRow
+                fprintf('    (%1g)', min(C(r,:)));
+            end
+
+            fprintf('\n');
         end
-    
-        for c = 1:cols
-            if markedCols(c)
-                fprintf('%5c ', '+');
-            else
-                fprintf('%5c ', ' ');
+
+        if printMinCol
+            for c = 1:cols
+                fprintf('%4c%1g%1c', '(', min(C(:,c)), ')');
+            end
+        else
+            for c = 1:cols
+                if markedCols(c)
+                    fprintf('%5c ', '+');
+                else
+                    fprintf('%5c ', ' ');
+                end
             end
         end
     
